@@ -1,0 +1,7 @@
+{
+  "aim_chat": 0,
+  "email": 1,
+  "facebook_audio": 2,
+  "facebook_chat": 3,
+  "facebook_video": 4
+}
