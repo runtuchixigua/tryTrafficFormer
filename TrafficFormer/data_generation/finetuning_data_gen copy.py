@@ -4,11 +4,6 @@ import shutil
 import binascii
 import scapy.all as scapy
 from functools import reduce
-
-# Monkey patch flowcontainer 来绕过 tshark 版本检查
-import flowcontainer.reader
-flowcontainer.reader.__tshark_max_version__ = '5.0.0'
-
 from flowcontainer.extractor import extract
 from utils import *
 import json,operator
@@ -394,9 +389,7 @@ def process_one_label(session_pcap_path,key,payload_length,payload_packet,sample
             result["direction"]["1"] = feature_data[3]
             result["message_type"]["1"] = feature_data[4]
 
-    if not os.path.exists("./temp/"):
-        os.mkdir("./temp/")
-    with open("./temp/"+key,'wb') as f:
+    with open("/mnt/data/zgm/ET-BERT/fine-tuning/temp/"+key,'wb') as f:
         pickle.dump(result,f)
 
 def generation_multiP(pcap_path, samples, dataset_save_path, payload_length = 64, payload_packet = 5, start_index=76):
@@ -457,91 +450,70 @@ def convert_splitcap(pcapng_path, pcap_path,pcap_split_path,is_pcap_label=False)
     # pcapng_path: the path of pcapng files (if the traffic is the pacp type, pcapng_path = pcap_path)
     # pcap_path: the path of pcap files
     # pcap_split_path: the path of splited pcap files
-    # pcapng to pcap - 保留原始文件夹结构
-    label_name_list = []
-    for parent, dirs, files in os.walk(pcapng_path):
-        # 获取相对于 pcapng_path 的相对路径
-        relative_path = os.path.relpath(parent, pcapng_path)
-        
-        # 创建对应的输出目录
-        output_dir = os.path.join(pcap_path, relative_path)
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # 如果是顶级目录，记录标签文件夹
-        if relative_path == '.':
-            label_name_list = dirs
-        
-        # 转换文件
-        for file in files:
-            input_file = os.path.join(parent, file)
-            # 替换扩展名
-            base_name, _ = os.path.splitext(file)
-            output_file = os.path.join(output_dir, base_name + '.pcap')
-            cmd = "editcap -F pcap \"%s\" \"%s\""
-            os.system(cmd % (input_file, output_file))
-    
-    print("Label name list:", label_name_list)
-    print("Number of labels:", len(label_name_list))
-    
+    # pcapng to pcap
+    if not os.listdir(pcap_path):
+        for parent, dirs, files in os.walk(pcapng_path):
+            for file in files:
+                cmd = "editcap -F pcap %s %s"
+                command = cmd%(parent+ "/" + file, pcap_path+ "/" + file)
+                os.system(command)
     # split pcap
+    label_name_list = []
+    for parent, dirs, files in os.walk(pcap_path):
+        if len(dirs)==0:
+            for file in files:
+                os.system(f"mkdir {pcap_path + file[:-5]}")
+                os.system(f"mv {pcap_path + file} {pcap_path + file[:-5]}")
+                label_name_list.append(file.split(".")[-2])
+        else:
+            label_name_list.extend(dirs)
+        break
+    print(len(label_name_list))
     for dir in label_name_list:
-        label_dir = os.path.join(pcap_path, dir)
-        if not os.path.exists(label_dir):
-            continue
-        for p, dd, ff in os.walk(label_dir):
+        for p,dd,ff in os.walk(parent + "/" + dir):
             for file in ff:
-                if file.endswith('.pcap'):
-                    if is_pcap_label:
-                        output_path = split_cap(pcap_split_path, p + "/", file, pcap_label=dir)
-                    else:
-                        output_path = split_cap(pcap_split_path, p + "/", file)
-    
+                if is_pcap_label:
+                    output_path = split_cap(pcap_split_path, p + "/", file, pcap_label=dir)
+                else:
+                    output_path = split_cap(pcap_split_path, p + "/", file)
     # remove small pcap and split again big pcap
-    splitcap_root = os.path.join(pcap_split_path, "splitcap")
-    if os.path.exists(splitcap_root):
-        for dir in os.listdir(splitcap_root):
-            dir_path = os.path.join(splitcap_root, dir)
-            if not os.path.isdir(dir_path):
-                continue
-            for f in os.listdir(dir_path):
-                file_path = os.path.join(dir_path, f)
-                if not os.path.isfile(file_path):
-                    continue
-                file_size = float(size_format(os.path.getsize(file_path)))
-                # 2KB
-                if file_size < 2:  # remove small pcap
-                    os.remove(file_path)
-                if file_size > 10240:  # 10MB split again big pcap
-                    print("bigger than 10MB")
-                    cmd = "editcap -i 300 \"{}\" \"{}\"".format(file_path, file_path)
-                    os.system(cmd)
-                    os.remove(file_path)
-    
+    for p,dd,ff in os.walk(pcap_split_path+"splitcap"):
+        for dir in dd:
+            for _,_,ff in os.walk(pcap_split_path+"splitcap" + "/" + dir):
+                for f in ff:
+                    file_size = float(size_format(os.path.getsize(pcap_split_path+"splitcap" + "/" + dir + "/" + f)))
+                    # 2KB
+                    if file_size < 2: #remove small pcap
+                        os.remove(pcap_split_path+"splitcap" + "/" + dir + "/" + f)
+                        #print("remove sample: %s for its size is less than 2 KB." % (pcap_split_path+"splitcap" + "/" + dir + "/" + f))
+                    if file_size > 10240: #10MB  split again big pcap
+                        print("bigger than 10MB")
+                        cmd = "editcap -i 300 {} {}".format(pcap_split_path+"splitcap" + "/" + dir + "/" + f, pcap_split_path+"splitcap" + "/" + dir + "/" + f)
+                        os.system(cmd)
+                        os.system("rm {}".format(pcap_split_path+"splitcap" + "/" + dir + "/" + f))
+                break
+        break
     # remove class that has less flow
     all_flows = []
-    if os.path.exists(splitcap_root):
-        for dir in os.listdir(splitcap_root):
-            dir_path = os.path.join(splitcap_root, dir)
-            if not os.path.isdir(dir_path):
-                continue
-            flow_count = len([f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))])
-            print(dir, flow_count)
-            if flow_count < 10:
-                shutil.rmtree(dir_path)
-                print("remove class: %s for its flow size is less than 10." % dir)
-            else:
-                all_flows.append(flow_count)
-    print("all flows: ", sum(all_flows), len(all_flows))
+    for p,dd,ff in os.walk(pcap_split_path+"splitcap"):
+        for dir in dd:
+            for _,_,ff in os.walk(pcap_split_path+"splitcap" + "/" + dir):
+                print(dir,len(ff))
+                if len(ff)<10:
+                    shutil.rmtree(pcap_split_path+"splitcap" + "/" + dir)
+                    print("remove class: %s for its flow size is less than 10." % (pcap_split_path+"splitcap" + "/" + dir))
+                else:
+                    all_flows.append(len(ff))
+        break
+    print("all flows: ",sum(all_flows), len(all_flows))
 
-def dataset_extract(dataset_save_path, pcap_path=None, features=None, dataset_level=None):
-    if features is None:
-        features = ['datagram', 'length', 'time', 'direction', 'message_type']
+def dataset_extract(dataset_save_path, features):
     
     print("read dataset from json file.")
     with open(dataset_save_path + "/dataset.json","r") as f:
         dataset = json.load(f)
     
-    dataset_statistic = [0] * len(dataset.keys())
+    dataset_statistic = [0] * _category
 
     data_all = []
     for app_label in dataset.keys():

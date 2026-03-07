@@ -29,7 +29,6 @@ def convert_pcapng_2_pcap(pcapng_path, pcapng_file, output_path):
     return 0
 
 def split_cap(pcap_split_path, pcap_file_path, pcap_name, pcap_label='', split_way = 'bidirection'):
-    import scapy.all as scapy
     # pcap_split_path + "splitcap/" + pcap_label + "/" + pcap_name is output
     # pcap_file_path+pcap_name is input
     if not os.path.exists(pcap_split_path + "/splitcap"):
@@ -37,56 +36,18 @@ def split_cap(pcap_split_path, pcap_file_path, pcap_name, pcap_label='', split_w
     if pcap_label != '':
         if not os.path.exists(pcap_split_path + "splitcap/" + pcap_label):
             os.mkdir(pcap_split_path + "splitcap/" + pcap_label)
-        output_path = pcap_split_path + "splitcap/" + pcap_label
+        # if not os.path.exists(pcap_split_path + "splitcap/" + pcap_label + "/" + pcap_name):
+        #     os.mkdir(pcap_split_path + "splitcap/" + pcap_label + "/" + pcap_name)
+        output_path = pcap_split_path + "splitcap/" + pcap_label #+ "/" + pcap_name
     else:
         if not os.path.exists(pcap_split_path + "splitcap/" + pcap_name):
             os.mkdir(pcap_split_path + "splitcap/" + pcap_name)
         output_path = pcap_split_path + "splitcap/" + pcap_name
-    
-    print(pcap_file_path+pcap_name, output_path)
-    
-    # 使用 scapy 按会话/流分割 pcap 文件
-    sessions = {}
-    packets = scapy.rdpcap(pcap_file_path + pcap_name)
-    
-    for pkt in packets:
-        if scapy.IP in pkt:
-            src_ip = pkt[scapy.IP].src
-            dst_ip = pkt[scapy.IP].dst
-            proto = pkt[scapy.IP].proto
-            
-            src_port = None
-            dst_port = None
-            
-            if scapy.TCP in pkt:
-                src_port = pkt[scapy.TCP].sport
-                dst_port = pkt[scapy.TCP].dport
-            elif scapy.UDP in pkt:
-                src_port = pkt[scapy.UDP].sport
-                dst_port = pkt[scapy.UDP].dport
-            
-            if src_port is not None and dst_port is not None:
-                # 创建会话键（双向会话使用排序后的元组）
-                if split_way == 'bidirection':
-                    if src_ip < dst_ip or (src_ip == dst_ip and src_port < dst_port):
-                        session_key = (src_ip, src_port, dst_ip, dst_port, proto)
-                    else:
-                        session_key = (dst_ip, dst_port, src_ip, src_port, proto)
-                else:
-                    session_key = (src_ip, src_port, dst_ip, dst_port, proto)
-                
-                if session_key not in sessions:
-                    sessions[session_key] = []
-                sessions[session_key].append(pkt)
-    
-    # 保存每个会话到单独的 pcap 文件
-    base_name = pcap_name.rsplit('.', 1)[0]
-    for i, (session_key, session_packets) in enumerate(sessions.items(), 1):
-        src_ip, src_port, dst_ip, dst_port, proto = session_key
-        proto_name = 'TCP' if proto == 6 else 'UDP' if proto == 17 else str(proto)
-        output_file = f"{output_path}/{base_name}_{proto_name}_{i}.pcap"
-        scapy.wrpcap(output_file, session_packets)
-    
+    split_way = "session" if split_way=='bidirection' else "flow"
+    print(pcap_file_path+pcap_name,output_path)
+    cmd = f"mono ./SplitCap.exe -r {pcap_file_path+pcap_name} -s {split_way} -o {output_path}"
+    #print(cmd)
+    os.system(cmd)
     return output_path
 
 def cut(obj, sec):

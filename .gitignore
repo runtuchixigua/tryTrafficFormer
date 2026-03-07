@@ -3,3 +3,9 @@ NonVPN-PCAPs-01.zip
 nomoe_bertflow_pre-trained_model.bin-120000
 pre-trained_model.bin.zip
 /TrafficFormer/models/finetuned_model.bin
+finetune_data
+finetune_data_debug
+pcap
+pcap_debug
+split_outputs
+split_outputs_debug

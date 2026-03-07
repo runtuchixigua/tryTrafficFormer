@@ -86,13 +86,7 @@ def count_labels_num(path):
 def load_or_initialize_parameters(args, model):
     if args.pretrained_model_path is not None:
         print("Initialize with pretrained model.")
-        if torch.cuda.is_available():
-            map_location = {'cuda:1':'cuda:0', 'cuda:2':'cuda:0', 'cuda:3':'cuda:0'}
-        elif torch.backends.mps.is_available():
-            map_location = 'mps'
-        else:
-            map_location = 'cpu'
-        model.load_state_dict(torch.load(args.pretrained_model_path, map_location=map_location), strict=False)
+        model.load_state_dict(torch.load(args.pretrained_model_path, map_location={'cuda:1':'cuda:0', 'cuda:2':'cuda:0', 'cuda:3':'cuda:0'}), strict=False)
     else:
         print("Initialize with normal distribution.")
         for n, p in list(model.named_parameters()):
@@ -285,9 +279,6 @@ def main():
     parser.add_argument("--soft_alpha", type=float, default=0.5,
                         help="Weight of the soft targets loss.")
     
-    parser.add_argument("--use_cpu", action='store_true',
-                        help="Force use CPU instead of GPU/MPS.")
-    
     #MOE Model Options
     parser.add_argument("--is_moe", action="store_true", help="adopt moe layer.")
     parser.add_argument("--vocab_size", type=int, required=False, help="Number of vocab.")
@@ -320,11 +311,7 @@ def main():
     # Load or initialize parameters.
     load_or_initialize_parameters(args, model)
 
-    if args.use_cpu:
-        args.device = torch.device("cpu")
-    else:
-        args.device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f"Using device: {args.device}")
+    args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = model.to(args.device)
 
     if args.train_path is None:
@@ -395,9 +382,9 @@ def main():
     if args.test_path is not None:
         print("Test set evaluation.")
         if torch.cuda.device_count() > 1:
-            model.module.load_state_dict(torch.load(args.output_model_path, map_location=args.device))
+            model.module.load_state_dict(torch.load(args.output_model_path))
         else:
-            model.load_state_dict(torch.load(args.output_model_path, map_location=args.device))
+            model.load_state_dict(torch.load(args.output_model_path))
         evaluate(args, read_dataset(args, args.test_path), True)
 
 

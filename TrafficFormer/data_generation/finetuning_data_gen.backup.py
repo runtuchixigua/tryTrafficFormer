@@ -4,11 +4,6 @@ import shutil
 import binascii
 import scapy.all as scapy
 from functools import reduce
-
-# Monkey patch flowcontainer 来绕过 tshark 版本检查
-import flowcontainer.reader
-flowcontainer.reader.__tshark_max_version__ = '5.0.0'
-
 from flowcontainer.extractor import extract
 from utils import *
 import json,operator
