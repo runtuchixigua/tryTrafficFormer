@@ -9,3 +9,4 @@ pcap
 pcap_debug
 split_outputs
 split_outputs_debug
+finetuned_model.bin

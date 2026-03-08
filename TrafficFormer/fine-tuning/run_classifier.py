@@ -86,7 +86,7 @@ def count_labels_num(path):
 def load_or_initialize_parameters(args, model):
     if args.pretrained_model_path is not None:
         print("Initialize with pretrained model.")
-        model.load_state_dict(torch.load(args.pretrained_model_path, map_location={'cuda:1':'cuda:0', 'cuda:2':'cuda:0', 'cuda:3':'cuda:0'}), strict=False)
+        model.load_state_dict(torch.load(args.pretrained_model_path, map_location='cpu'), strict=False)
     else:
         print("Initialize with normal distribution.")
         for n, p in list(model.named_parameters()):
@@ -311,7 +311,7 @@ def main():
     # Load or initialize parameters.
     load_or_initialize_parameters(args, model)
 
-    args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    args.device = torch.device("cpu")
     model = model.to(args.device)
 
     if args.train_path is None:
